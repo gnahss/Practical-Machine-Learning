@@ -1,0 +1,69 @@
+---
+title: "Practical Machine Learning Project"
+author: "Shanghui Li"
+date: "June 5, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Download and clean data
+
+```{r clean}
+trainFile <- 'C:/Users/sh/Desktop/R stuff/Practical Machine Learning/train.csv'
+testFile <- 'C:/Users/sh/Desktop/R stuff/Practical Machine Learning/test.csv'
+download.file('https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv', trainFile)
+download.file('https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv', testFile)
+df <- read.csv(trainFile)
+test <- read.csv(testFile)
+rm <- which(colSums(is.na(df))/length(df[,1])>0.9 | colSums(df=="")/length(df[,1])>0.9) # find variables with large number of missing variables
+df <- df[,-rm]
+test <- test[,-rm]
+df <- df[,-(1:7)] # remove descriptive data
+test <- test[,-(1:7)]
+```
+
+## Create validation set
+
+```{r slice}
+library(caret)
+library(randomForest)
+set.seed(945)
+inVal <- createDataPartition(y=df$classe, p=0.3, list=FALSE)
+val <- df[inVal,]
+training <- df[-inVal,]
+```
+
+## Trees
+```{r trees}
+treeFit <- train(classe~., data=training, method='rpart')
+confusionMatrix(val$classe, predict(treeFit, newdata=val))
+```
+
+## Linear discriminant analysis
+```{r lda}
+ldaFit <- train(classe~., data=training, method='lda')
+confusionMatrix(val$classe, predict(ldaFit, newdata=val))
+```
+
+## Random forest
+
+```{r pca}
+preProc <- preProcess(training[,-53], method='pca', thresh=0.9)
+trainPC <- predict(preProc, training[,-53]) # reduce dimensionality using PCA
+rfFit <- randomForest(y=training$classe, x=trainPC) 
+valPC <- predict(preProc, val[,-53])
+confusionMatrix(val$classe, predict(rfFit, valPC))
+```
+
+## Select prediction model
+The random forest model achieved the highest accuracy on the validation set, hence I use it to evaluate the test cases. The expected out of sample error rate is 2.65%.
+
+## Evaluate test cases
+```{r predict}
+testPC <- predict(preProc, test[,-53])
+predict(rfFit, testPC)
+```
+
